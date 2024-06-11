@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
-import 'package:genre_filter_chips.dart';
-import 'package:type_filter_chips.dart';
-import 'package:contentwarning_filter_chips.dart';
-import 'package:totalplayer_filter_chips.dart';
-import 'package:male_filter_chips.dart';
-import 'package:female_filter_chips.dart';
-import 'package:time_filter_chips.dart';
-import 'package:featured_filter_chips.dart';
+import 'genre_filter_chips.dart';
+import 'type_filter_chips.dart';
+import 'contentwarning_filter_chips.dart';
+import 'totalplayer_filter_chips.dart';
+import 'male_filter_chips.dart';
+import 'female_filter_chips.dart';
+import 'time_filter_chips.dart';
+import 'featured_filter_chips.dart';
 import 'dart:convert';
 
 
