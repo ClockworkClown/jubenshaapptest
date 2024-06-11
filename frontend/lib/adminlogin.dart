@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:login_screen.dart';
-import 'package:admin_homescreen.dart';
+import 'login_screen.dart';
+import 'admin_homescreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'dart:convert';
