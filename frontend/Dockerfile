@@ -1,17 +1,19 @@
 # Use an official Dart image with Flutter SDK installed
 FROM cirrusci/flutter:stable
 
-# Set the working directory
+# Set the working directory inside the container
 WORKDIR /app
 
-# Copy the current directory contents into the container at /app
-COPY . /app
+# Copy the entire project directory into the container
+COPY . .
 
-# Install dependencies
-RUN flutter pub get
+# Install dependencies as non-root user
+RUN adduser --disabled-password --gecos '' flutteruser \
+    && chown -R flutteruser /app \
+    && su flutteruser -c 'flutter pub get'
 
 # Build the Flutter web app
-RUN flutter build web
+RUN su flutteruser -c 'flutter build web'
 
 # Expose the web directory as a volume to be used by the host system
 VOLUME ["/app/build/web"]
