@@ -120,7 +120,8 @@ app.get('/scripts', async (req, res) => {
         script_genre,
         script_type,
         script_contentwarning,
-		script_featured
+		script_featured,
+		script_description
       FROM script
     `;
 
@@ -137,7 +138,8 @@ app.get('/scripts', async (req, res) => {
       genre: row.script_genre,
       type: row.script_type,
       contentwarnings: row.script_contentwarning,
-	  featured: row.script_featured
+	  featured: row.script_featured,
+	  description: row.script_description
     }));
 
     res.json(scripts);
@@ -188,7 +190,8 @@ app.get('/publicbooking', async (req, res) => {
         booking.booking_gender,
         booking.booking_playercount,
         booking.booking_malecount,
-        booking.booking_femalecount
+        booking.booking_femalecount,
+		booking.room_id
       FROM booking
       INNER JOIN script ON booking.script_id = script.script_id
       INNER JOIN player ON booking.player_id = player.player_id
@@ -213,7 +216,8 @@ app.get('/publicbooking', async (req, res) => {
       femalecount: row.booking_femalecount,
       playermax: row.script_playermax,
       malemax: row.script_malemax,
-      femalemax: row.script_femalemax
+      femalemax: row.script_femalemax,
+	  room: row.room_id
     }));
 
     res.json(publicBookings);
@@ -785,7 +789,8 @@ app.get('/playerbooking', async (req, res) => {
         booking.booking_malecount,
         booking.booking_femalecount,
         booking.booking_status,
-		booking.booking_reviewed
+		booking.booking_reviewed,
+		booking.room_id
       FROM booking
       INNER JOIN script ON booking.script_id = script.script_id
       INNER JOIN player ON booking.player_id = player.player_id
@@ -814,7 +819,8 @@ app.get('/playerbooking', async (req, res) => {
           femalemax: row.script_femalemax,
           bookingstatus: row.booking_status,
           playerowner: isPlayerOwner ? 'yes' : 'no',
-		  reviewed: row.booking_reviewed
+		  reviewed: row.booking_reviewed,
+		  room: row.room_id
         };
       });
 
@@ -1364,7 +1370,7 @@ app.get('/unassignedbooking', async (req, res) => {
       booking_id: row.booking_id,
       script_name: row.script_name,
       player_name: row.player_username,
-      date: row.booking_date,
+      date: new Date(row.booking_date.getTime() + (24 * 60 * 60 * 1000)),
       start: row.booking_start,
       end: row.booking_end,
 	  state: row.booking_state,
@@ -1433,7 +1439,7 @@ app.get('/assignedbooking', async (req, res) => {
       booking_id: row.booking_id,
       script_name: row.script_name,
       player_name: row.player_username,
-      date: row.booking_date,
+      date: new Date(row.booking_date.getTime() + (24 * 60 * 60 * 1000)),
       start: row.booking_start,
       end: row.booking_end,
 	  state: row.booking_state,
@@ -1522,20 +1528,50 @@ app.post('/assign', async (req, res) => {
 
 app.post('/markComplete', async (req, res) => {
   const { bookingID } = req.query;
-
   try {
-	console.log('Booking ID:', bookingID);
-	
-    const updateQuery = `
+    console.log('Booking ID:', bookingID);
+
+    await pool.query('BEGIN');
+
+    // Mark booking as completed
+    const updateBookingQuery = `
       UPDATE booking
       SET booking_status = $1
       WHERE booking_id = $2
     `;
-    const updateValues = ['completed', bookingID];
-    await pool.query(updateQuery, updateValues);
-	
+    const updateBookingValues = ['completed', bookingID];
+    await pool.query(updateBookingQuery, updateBookingValues);
+
+    // Find participationIDs from given bookingID
+    const findParticipationQuery = `
+      SELECT participation_id
+      FROM participation
+      WHERE booking_id = $1
+    `;
+    const participationIdsResult = await pool.query(findParticipationQuery, [bookingID]);
+
+    // Update the player_playedcases for each participation ID
+    for (let i = 0; i < participationIdsResult.rows.length; i++) {
+  const participation_id = participationIdsResult.rows[i].participation_id;
+  const updatePlayerQuery = `
+    UPDATE player
+    SET player_playedcases = player_playedcases + 1
+    WHERE player_id = (
+      SELECT player_id
+      FROM participation
+      WHERE participation_id = $1
+    )
+  `;
+  await pool.query(updatePlayerQuery, [participation_id]);
+}
+
+    // Commit the transaction
+    await pool.query('COMMIT');
+
     res.status(200).json({ message: 'Booking marked as completed' });
   } catch (error) {
+    // Rollback the transaction if an error occurs
+    await pool.query('ROLLBACK');
     console.error('Error marking booking as completed:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
@@ -1726,6 +1762,66 @@ app.post('/updateProfile', async (req, res) => {
   } catch (error) {
     console.error('Error updating profile:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+app.get('/getplayedscripts', async (req, res) => {
+  const { username } = req.query;
+
+  try {
+    // Get player_id from player table
+    const getPlayerQuery = `
+      SELECT player_id
+      FROM player
+      WHERE player_username = $1
+    `;
+    const { rows: playerRows } = await pool.query(getPlayerQuery, [username]);
+    if (playerRows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const playerId = playerRows[0].player_id;
+
+    // Get booking_ids from participation table
+    const getBookingIdsQuery = `
+      SELECT booking_id
+      FROM participation
+      WHERE player_id = $1
+    `;
+    const { rows: bookingIdRows } = await pool.query(getBookingIdsQuery, [playerId]);
+    const bookingIds = bookingIdRows.map(row => row.booking_id);
+
+    // Get completed booking_ids
+    const getCompletedBookingIdsQuery = `
+      SELECT booking_id
+      FROM booking
+      WHERE booking_id = ANY($1)
+        AND booking_status = 'completed'
+    `;
+    const { rows: completedBookingIdRows } = await pool.query(getCompletedBookingIdsQuery, [bookingIds]);
+    const completedBookingIds = completedBookingIdRows.map(row => row.booking_id);
+
+    // Get script_ids from completed bookings
+    const getScriptIdsQuery = `
+      SELECT script_id
+      FROM booking
+      WHERE booking_id = ANY($1)
+    `;
+    const { rows: scriptIdRows } = await pool.query(getScriptIdsQuery, [completedBookingIds]);
+    const scriptIds = scriptIdRows.map(row => row.script_id);
+
+    // Get script names
+    const getScriptNamesQuery = `
+      SELECT script_name
+      FROM script
+      WHERE script_id = ANY($1)
+    `;
+    const { rows: scriptNameRows } = await pool.query(getScriptNamesQuery, [scriptIds]);
+    const scriptNames = scriptNameRows.map(row => row.script_name);
+
+    res.json({ scriptNames });
+  } catch (error) {
+    console.error('Error retrieving completed scripts:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
