@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
-import 'genre_filter_chips.dart';
-import 'type_filter_chips.dart';
-import 'contentwarning_filter_chips.dart';
-import 'totalplayer_filter_chips.dart';
-import 'male_filter_chips.dart';
-import 'female_filter_chips.dart';
-import 'time_filter_chips.dart';
-import 'featured_filter_chips.dart';
+import 'package:untitled1/genre_filter_chips.dart';
+import 'package:untitled1/type_filter_chips.dart';
+import 'package:untitled1/contentwarning_filter_chips.dart';
+import 'package:untitled1/totalplayer_filter_chips.dart';
+import 'package:untitled1/male_filter_chips.dart';
+import 'package:untitled1/female_filter_chips.dart';
+import 'package:untitled1/time_filter_chips.dart';
+import 'package:untitled1/featured_filter_chips.dart';
 import 'dart:convert';
 
 
@@ -109,6 +109,9 @@ class Script {
   final String type;
   final List<String>? contentwarnings;
   final bool featured;
+  final String description;
+  final double? averageRating;
+  bool played = false;
 
   Script({
     required this.id,
@@ -121,11 +124,12 @@ class Script {
     required this.genre,
     required this.type,
     required this.contentwarnings,
-    required this.featured
+    required this.featured,
+    required this.description,
+    this.averageRating,
   });
 
   factory Script.fromJson(Map<String, dynamic> json) {
-
     final timeMap = json['time'] as Map<String, dynamic>;
     final hours = timeMap['hours'] ?? 0;
     final minutes = timeMap['minutes'] ?? 0;
@@ -148,7 +152,9 @@ class Script {
       contentwarnings: json['contentwarnings'] is List
           ? List<String>.from(json['contentwarnings'])
           : null,
-      featured: json['featured']
+      featured: json['featured'],
+      description: json['description'],
+      averageRating: json['averageRating']?.toDouble(), // Parse the averageRating from the JSON
     );
   }
 }
@@ -194,6 +200,7 @@ class PublicBooking {
   final int playermax;
   final int malemax;
   final int femalemax;
+  final int room;
 
   PublicBooking({
     required this.booking_id,
@@ -210,6 +217,7 @@ class PublicBooking {
     required this.playermax,
     required this.malemax,
     required this.femalemax,
+    required this.room
   });
 
   factory PublicBooking.fromJson(Map<String, dynamic> json) {
@@ -234,6 +242,7 @@ class PublicBooking {
       playermax: json['playermax'],
       malemax: json['malemax'],
       femalemax: json['femalemax'],
+      room: json['room']
     );
   }
 }
@@ -257,6 +266,7 @@ class PlayerBooking {
   final String bookingstatus;
   final String playerowner;
   final bool reviewed;
+  final int room;
 
   PlayerBooking({
     required this.booking_id,
@@ -276,7 +286,8 @@ class PlayerBooking {
     required this.femalemax,
     required this.bookingstatus,
     required this.playerowner,
-    required this.reviewed
+    required this.reviewed,
+    required this.room
   });
 
   factory PlayerBooking.fromJson(Map<String, dynamic> json) {
@@ -313,7 +324,8 @@ class PlayerBooking {
       femalemax: json['femalemax'],
       bookingstatus: json['bookingstatus'],
       playerowner: json['playerowner'],
-      reviewed: json['reviewed']
+      reviewed: json['reviewed'],
+      room: json['room']
     );
   }
 }
@@ -719,7 +731,7 @@ class _ScriptBookingPageState extends State<ScriptBookingPage> {
   Set<int> _selectedFemalePlayers = {};
   Set<Duration> _selectedTime = {};
   Set<bool> _selectedFeatured = {};
-  int _sortBy = 0; // 0 = genre, 1 = type, 2 = content warning
+  int _sortBy = 0; // 0 = genre, 1 = type, 2 = content warning, 3 = average rating, 4 = playtime, 5 = max players
 
   @override
   void initState() {
@@ -757,7 +769,19 @@ class _ScriptBookingPageState extends State<ScriptBookingPage> {
               ),
               PopupMenuItem(
                 value: 2,
-                child: Text('Sort by Content Warning'),
+                child: Text('Sort by Content Warning (least to most)'),
+              ),
+              PopupMenuItem(
+                value: 3,
+                child: Text('Sort by Average Rating'),
+              ),
+              PopupMenuItem(
+                value: 4,
+                child: Text('Sort by Playtime'),
+              ),
+              PopupMenuItem(
+                value: 5,
+                child: Text('Sort by Maximum Players'),
               ),
             ],
             onSelected: (value) {
@@ -782,8 +806,18 @@ class _ScriptBookingPageState extends State<ScriptBookingPage> {
               itemBuilder: (context, index) {
                 final script = _filteredScripts[index];
                 return ListTile(
-                  title: Text(script.name),
-                  subtitle: Text('Players: ${script.playercount} - Time: ${formatDuration(script.time)}'),
+                  title: Text(
+                    script.name,
+                    style: TextStyle(
+                      color: script.played ? Colors.grey : Colors.black, // Gray if played, black if not
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Players: ${script.playercount} - Time: ${formatDuration(script.time)}',
+                    style: TextStyle(
+                      color: script.played ? Colors.grey : Colors.black, // Gray if played, black if not
+                    ),
+                  ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -800,12 +834,12 @@ class _ScriptBookingPageState extends State<ScriptBookingPage> {
                                 builder: (context, snapshot) {
                                   if (snapshot.connectionState == ConnectionState.waiting) {
                                     return AlertDialog(
-                                      title: Text('More Details'),
+                                      title: Text('More Details', style: TextStyle(fontSize: 20)),
                                       content: CircularProgressIndicator(),
                                     );
                                   } else if (snapshot.hasError) {
                                     return AlertDialog(
-                                      title: Text('More Details'),
+                                      title: Text('More Details', style: TextStyle(fontSize: 20)),
                                       content: Text('Error: ${snapshot.error}'),
                                     );
                                   } else if (snapshot.hasData && snapshot.data!.isNotEmpty) {
@@ -817,58 +851,60 @@ class _ScriptBookingPageState extends State<ScriptBookingPage> {
                                     String averageRatingString = averageRating.toStringAsFixed(1);
 
                                     return AlertDialog(
-                                      title: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text('More Details'),
-                                          Row(
-                                            children: [
-                                              Text('Average Rating: '),
-                                              // Display average rating using filled stars
-                                              Row(
-                                                children: [
-                                                  for (int i = 0; i < averageRating.floor(); i++)
-                                                    Icon(Icons.star, color: Colors.yellow[600]),
-                                                  if (averageRating - averageRating.floor() >= 0.5)
-                                                    Icon(Icons.star_half, color: Colors.yellow[600]),
-                                                ],
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text('$averageRatingString'), // Display the rounded average rating string
-                                            ],
-                                          ),
-                                        ],
-                                      ),
+                                      title: Text('More Details', style: TextStyle(fontSize: 20)),
                                       content: SizedBox(
-                                        width: 280, // Constrain the width here
-                                        child: ListView.builder(
-                                          shrinkWrap: true,
-                                          itemCount: snapshot.data!.length,
-                                          itemBuilder: (context, index) {
-                                            final review = snapshot.data![index];
-                                            return ListTile(
-                                              title: Row(
-                                                children: [
-                                                  // Display rating using filled stars
-                                                  Row(
-                                                    children: List.generate(
-                                                      review.reviewRating,
-                                                          (index) => Icon(Icons.star, color: Colors.yellow[600]),
+                                        width: 280,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text('Genre: ${script.genre}'),
+                                            Text('Type: ${script.type}'),
+                                            Text('Content Warning: ${script.contentwarnings}'),
+                                            Text('Description: ${script.description}'),
+                                            SizedBox(height: 8),
+                                            Text('Average Rating: '),
+                                            Row(
+                                              children: [
+                                                for (int i = 0; i < averageRating.floor(); i++)
+                                                  Icon(Icons.star, color: Colors.yellow[600]),
+                                                if (averageRating - averageRating.floor() >= 0.5)
+                                                  Icon(Icons.star_half, color: Colors.yellow[600]),
+                                              ],
+                                            ),
+                                            SizedBox(width: 8),
+                                            Text('$averageRatingString'),
+                                            SizedBox(height: 16),
+                                            Expanded(
+                                              child: ListView.builder(
+                                                shrinkWrap: true,
+                                                itemCount: snapshot.data!.length,
+                                                itemBuilder: (context, index) {
+                                                  final review = snapshot.data![index];
+                                                  return ListTile(
+                                                    title: Row(
+                                                      children: [
+                                                        Row(
+                                                          children: List.generate(
+                                                            review.reviewRating,
+                                                                (index) => Icon(Icons.star, color: Colors.yellow[600]),
+                                                          ),
+                                                        ),
+                                                        SizedBox(width: 8),
+                                                        Text('Rating: ${review.reviewRating}'),
+                                                      ],
                                                     ),
-                                                  ),
-                                                  SizedBox(width: 8),
-                                                  Text('Rating: ${review.reviewRating}'),
-                                                ],
+                                                    subtitle: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Text('Owner: ${review.reviewOwner}'),
+                                                        Text('Contents: ${review.reviewContents}'),
+                                                      ],
+                                                    ),
+                                                  );
+                                                },
                                               ),
-                                              subtitle: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text('Owner: ${review.reviewOwner}'),
-                                                  Text('Contents: ${review.reviewContents}'),
-                                                ],
-                                              ),
-                                            );
-                                          },
+                                            ),
+                                          ],
                                         ),
                                       ),
                                       actions: [
@@ -880,8 +916,21 @@ class _ScriptBookingPageState extends State<ScriptBookingPage> {
                                     );
                                   } else {
                                     return AlertDialog(
-                                      title: Text('More Details'),
-                                      content: Text('No reviews found.'),
+                                      title: Text('More Details', style: TextStyle(fontSize: 20)),
+                                      content: SizedBox(
+                                        width: 280,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text('Genre: ${script.genre}'),
+                                            Text('Type: ${script.type}'),
+                                            Text('Content Warning: ${script.contentwarnings}'),
+                                            Text('Description: ${script.description}'),
+                                            SizedBox(height: 8),
+                                            Text('No reviews found.'),
+                                          ],
+                                        ),
+                                      ),
                                       actions: [
                                         TextButton(
                                           onPressed: () => Navigator.of(context).pop(),
@@ -998,6 +1047,13 @@ class _ScriptBookingPageState extends State<ScriptBookingPage> {
         actions: [
           ElevatedButton(
             onPressed: () {
+              _markPlayedScripts();
+              Navigator.of(context).pop();
+            },
+            child: Text('Mark Played Scripts'),
+          ),
+          ElevatedButton(
+            onPressed: () {
               _applyRecommendedFilters();
               Navigator.of(context).pop();
             },
@@ -1063,6 +1119,8 @@ class _ScriptBookingPageState extends State<ScriptBookingPage> {
       if (_selectedFeatured.isNotEmpty) {
         _filteredScripts = _filteredScripts.where((script) => _selectedFeatured.contains(script.featured)).toList();
       }
+
+      _sortScripts();
     });
   }
 
@@ -1083,16 +1141,40 @@ class _ScriptBookingPageState extends State<ScriptBookingPage> {
     }
   }
 
+  Future<void> _markPlayedScripts() async {
+    try {
+      final playedScriptNames = await fetchPlayedScripts(widget.username);
+      setState(() {
+        for (var script in _scripts) {
+          if (playedScriptNames.contains(script.name)) {
+            script.played = true;
+          }
+        }
+      });
+    } catch (e) {
+      print('Error fetching played scripts: $e');
+    }
+  }
+
   void _sortScripts() {
     switch (_sortBy) {
       case 0:
-        _scripts.sort((a, b) => (a.genre ?? '').compareTo(b.genre ?? ''));
+        _filteredScripts.sort((a, b) => (a.genre ?? '').compareTo(b.genre ?? ''));
         break;
       case 1:
-        _scripts.sort((a, b) => (a.type ?? '').compareTo(b.type ?? ''));
+        _filteredScripts.sort((a, b) => (a.type ?? '').compareTo(b.type ?? ''));
         break;
       case 2:
-        _scripts.sort((a, b) => (a.contentwarnings?.length ?? 0).compareTo(b.contentwarnings?.length ?? 0));
+        _filteredScripts.sort((a, b) => (a.contentwarnings?.length ?? 0).compareTo(b.contentwarnings?.length ?? 0));
+        break;
+      case 3:
+        _filteredScripts.sort((a, b) => (b.averageRating ?? 0).compareTo(a.averageRating ?? 0));
+        break;
+      case 4:
+        _filteredScripts.sort((a, b) => a.time.compareTo(b.time));
+        break;
+      case 5:
+        _filteredScripts.sort((a, b) => a.playermax.compareTo(b.playermax));
         break;
     }
   }
@@ -1149,6 +1231,8 @@ class _PublicBookingPageState extends State<PublicBookingPage> {
                           Text('Date: ${booking.date.toIso8601String().substring(0, 10)}'),
                           SizedBox(height: 8),
                           Text('Time: ${booking.start.format(context)} - ${booking.end.format(context)}'),
+                          SizedBox(height: 8),
+                          Text('Room: Room ${booking.room}'),
                           SizedBox(height: 8),
                           Text('Number of Played Games needed to join: ${booking.experience}'),
                           SizedBox(height: 8),
@@ -1441,6 +1525,7 @@ class _AlterBookingPopupState extends State<AlterBookingPopup> {
               widget.bookingId,
               _selectedTime?.format(context) ?? '',
               _selectedDate.toString().split(' ')[0],
+              context
             );
 
             // Once altering booking is successful, close the dialog
@@ -1548,6 +1633,8 @@ class _PlayerBookingPageState extends State<PlayerBookingPage> with TickerProvid
                         SizedBox(height: 8),
                         Text('Time: ${booking.start.format(context)} - ${booking.end.format(context)}'),
                         SizedBox(height: 8),
+                        Text('Room: Room ${booking.room}'),
+                        SizedBox(height: 8),
                         if (booking.experience != null)
                           Text('Number of Played Games needed to join: ${booking.experience}'),
                         SizedBox(height: 8),
@@ -1591,7 +1678,7 @@ class _PlayerBookingPageState extends State<PlayerBookingPage> with TickerProvid
                                             TextButton(
                                               onPressed: () {
                                                 Navigator.of(context).pop(); // Dismiss the popup
-                                                clearBooking(booking.booking_id); // Call the ClearBooking function
+                                                clearBooking(booking.booking_id, context); // Call the ClearBooking function
                                               },
                                               child: Text('Yes'),
                                             ),
@@ -1933,12 +2020,30 @@ Future<List<Script>> fetchScriptsFromDatabase() async {
   final response = await http.get(Uri.parse('http://localhost:3000/scripts'));
 
   if (response.statusCode == 200) {
-    // Print the raw JSON data received from the backend
     print('Raw JSON data: ${response.body}');
-
-    // Parse the JSON data into a list of Script objects
     List<dynamic> data = json.decode(response.body);
-    List<Script> scripts = data.map((item) => Script.fromJson(item)).toList();
+    List<Script> scripts = [];
+
+    for (var item in data) {
+      final scriptId = item['id'];
+      final reviewsResponse = await http.get(Uri.parse('http://localhost:3000/getreviews?script_id=$scriptId'));
+
+      if (reviewsResponse.statusCode == 200) {
+        print('Raw JSON data: ${response.body}');
+        List<dynamic> reviewsData = json.decode(reviewsResponse.body);
+        List<Review> reviews = reviewsData.map((item) => Review.fromJson(item)).toList();
+
+        double totalRating = 0;
+        reviews.forEach((review) {
+          totalRating += review.reviewRating;
+        });
+        double averageRating = reviews.isEmpty ? 0 : totalRating / reviews.length;
+        item['averageRating'] = averageRating;
+      }
+
+      scripts.add(Script.fromJson(item));
+    }
+
     return scripts;
   } else {
     throw Exception('Failed to load scripts');
@@ -1949,10 +2054,7 @@ Future<List<Review>> fetchReviewsFromDatabase(int scriptId) async {
   final response = await http.get(Uri.parse('http://localhost:3000/getreviews?script_id=$scriptId'));
 
   if (response.statusCode == 200) {
-    // Print the raw JSON data received from the backend
     print('Raw JSON data: ${response.body}');
-
-    // Parse the JSON data into a list of Review objects
     List<dynamic> data = json.decode(response.body);
     List<Review> reviews = data.map((item) => Review.fromJson(item)).toList();
     return reviews;
@@ -1967,10 +2069,7 @@ Future<List<PublicBooking>> fetchPublicBookingsFromDatabase(String username) asy
   final response = await http.get(url);
 
   if (response.statusCode == 200) {
-    // Print the raw JSON data received from the backend
     print('Raw JSON data: ${response.body}');
-
-    // Parse the JSON data into a list of Public Booking objects
     List<dynamic> data = json.decode(response.body);
     List<PublicBooking> publicbookings = data.map((item) => PublicBooking.fromJson(item)).toList();
     return publicbookings;
@@ -1985,10 +2084,7 @@ Future<List<PlayerBooking>> fetchPlayerBookingsFromDatabase(String username) asy
   final response = await http.get(url);
 
   if (response.statusCode == 200) {
-    // Print the raw JSON data received from the backend
     print('Raw JSON data: ${response.body}');
-
-    // Parse the JSON data into a list of Player Booking objects
     List<dynamic> data = json.decode(response.body);
     List<PlayerBooking> playerbookings = data.map((item) => PlayerBooking.fromJson(item)).toList();
     return playerbookings;
@@ -2028,7 +2124,6 @@ void makeBooking(
     String genderAdherence,
     BuildContext context,
     ) async {
-  // Make the API request to book the script
   final response = await http.post(
     Uri.parse('http://localhost:3000/book'),
     headers: {
@@ -2049,7 +2144,7 @@ void makeBooking(
     // Booking successful
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Booking successful'),
+        content: Text('Booking successful.'),
         duration: Duration(seconds: 2),
       ),
     );
@@ -2104,7 +2199,8 @@ Future<void> alterBooking(
     String username,
     int bookingId,
     String time,
-    String date)
+    String date,
+    BuildContext context)
 async {
   print('Raw JSON data: ${username}, ${bookingId}, ${time}, ${date}');
   final url = Uri.parse('http://localhost:3000/alter');
@@ -2123,27 +2219,51 @@ async {
 
   if (response.statusCode == 201) {
     // Booking successful
-    print('Booking successful');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Booking successfully altered. Refresh to see changes.'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   } else {
     // Handle error
-    print('Error: ${response.body}');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Error: ${response.body}'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 }
 
-Future<void> clearBooking(int bookingId) async {
+Future<void> clearBooking(int bookingId, BuildContext context) async {
   final url = Uri.parse('http://localhost:3000/clear?bookingID=$bookingId');
 
   try {
     final response = await http.post(url);
     if (response.statusCode == 200) {
-      print('Booking successfully deleted');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Booking successfully deleted.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     } else {
       // Handle error
-      print('Failed to delete booking: ${response.body}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete booking: ${response.body}'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   } catch (error) {
-    print('Error: $error');
-    // Handle error
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Error: $error'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 }
 
@@ -2291,4 +2411,16 @@ Future<void> updateProfile(String oldUsername, String newUsername, String newEma
       );
     },
   );
+}
+
+Future<List<String>> fetchPlayedScripts(String username) async {
+  final url = Uri.parse('http://localhost:3000/getplayedscripts?username=$username');
+  final response = await http.get(url);
+
+  if (response.statusCode == 200) {
+    final data = jsonDecode(response.body);
+    return List<String>.from(data['scriptNames']);
+  } else {
+    throw Exception('Failed to fetch completed scripts');
+  }
 }
