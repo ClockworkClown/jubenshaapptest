@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# Install Flutter
-git clone https://github.com/flutter/flutter.git --depth 1 -b stable
-export PATH="$PATH:[PATH_TO_FLUTTER_GIT_DIRECTORY]/flutter/bin"
-flutter doctor
+
+# Clone Flutter repository
+FLUTTER_DIR=flutter
+git clone https://github.com/flutter/flutter.git --depth 1 -b stable $FLUTTER_DIR
+
+# Add Flutter to PATH
+export PATH="$PATH:$PWD/$FLUTTER_DIR/bin"
+
+# Run Flutter doctor
+$PWD/$FLUTTER_DIR/bin/flutter doctor
