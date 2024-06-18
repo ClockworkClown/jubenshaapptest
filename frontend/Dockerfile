@@ -1,20 +1,31 @@
-# Use an official Dart image with Flutter SDK installed
-FROM cirrusci/flutter:stable
+# Use an official Flutter image as a base
+FROM ubuntu:latest
 
-# Set the working directory inside the container
-WORKDIR /app
+# Set up necessary dependencies
+RUN apt-get update \
+    && apt-get install -y curl git unzip xz-utils zip \
+    && apt-get clean
 
-# Copy the entire project directory into the container
-COPY . .
+# Set up environment variables
+ENV PATH "$PATH:/flutter/bin"
 
-# Install dependencies
+# Download and install Flutter SDK
+RUN git clone https://github.com/flutter/flutter.git /flutter
+ENV PATH "$PATH:/flutter/bin/cache/dart-sdk/bin"
+
+# Run flutter doctor to install additional dependencies
+RUN flutter doctor
+
+# Copy the rest of your Flutter app code to the container
+COPY . /frontend/
+WORKDIR /frontend
+
+# Install Flutter dependencies
 RUN flutter pub get
 
-# Build the Flutter web app
+# Build Flutter web app
 RUN flutter build web
 
-# Expose the web directory as a volume to be used by the host system
-VOLUME ["/app/build/web"]
-
-# Set the entrypoint to a bash shell to keep the container running
-ENTRYPOINT ["bash"]
+# Specify the build directory
+EXPOSE 8080
+CMD ["flutter", "run", "--release", "--no-sound-null-safety", "-d", "web"]
