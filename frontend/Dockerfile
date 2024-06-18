@@ -1,5 +1,5 @@
 # Use an official Flutter image as a base
-FROM ubuntu:latest
+FROM flutter:latest
 
 # Set up necessary dependencies
 RUN apt-get update \
