@@ -67,7 +67,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
         child: TabBar(
           controller: _mainTabController,
           tabs: [
-            Tab(text: 'Unassigned Bookings'),
+            Tab(text: 'Pending Bookings'),
             Tab(text: 'View Play Data'),
           ],
         ),
@@ -187,7 +187,7 @@ class _UnassignedBookingsPageState extends State<UnassignedBookingsPage> {
                           SizedBox(height: 16),
                           ElevatedButton(
                             onPressed: () {
-                              assignBooking(widget.username, booking.bookingId);
+                              assignBooking(widget.username, booking.bookingId, context);
                             },
                             child: Text('Assign Self'),
                           ),
@@ -338,7 +338,7 @@ class _AssignedBookingsPageState extends State<AssignedBookingsPage> {
                                           TextButton(
                                             onPressed: () {
                                               print('Booking ID: ${booking.bookingId}');
-                                              markBookingCancelled(booking.bookingId);
+                                              markBookingCancelled(booking.bookingId, context);
                                               Navigator.of(context).pop();
                                             },
                                             child: Text("Confirm"),
@@ -373,7 +373,7 @@ class _AssignedBookingsPageState extends State<AssignedBookingsPage> {
                                           TextButton(
                                             onPressed: () {
                                               print('Booking ID: ${booking.bookingId}');
-                                              markBookingComplete(booking.bookingId);
+                                              markBookingComplete(booking.bookingId, context);
                                               Navigator.of(context).pop();
                                             },
                                             child: Text("Confirm"),
@@ -934,7 +934,7 @@ class Booking {
   final DateTime start;
   final DateTime end;
   final String state;
-  final String? experience;
+  final int? experience;
   final String? gender;
   final int playerCount;
   final int maleCount;
@@ -985,54 +985,106 @@ class Booking {
   }
 }
 
-Future<void> assignBooking(String username, int bookingID) async {
+Future<void> assignBooking(String username, int bookingID, BuildContext context) async {
   final url = Uri.parse('http://localhost:3000/assign?username=$username&bookingID=$bookingID');
 
   try {
     final response = await http.post(url);
     if (response.statusCode == 200) {
-      print('Booking successfully assigned to admin!');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Booking successfully assigned to admin! Refresh to see changes.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     } else if (response.statusCode == 404) {
-      print('Booking not found');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Booking not found'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     } else if (response.statusCode == 409) {
-      print('Booking time overlaps with an existing booking');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Booking time overlaps with an existing booking'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     } else {
-      print('Failed to assign booking: ${response.body}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to assign booking: ${response.body}'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   } catch (error) {
-    print('Error: $error');
-    // Handle error
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Error: $error'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 }
 
-Future<void> markBookingComplete(int bookingID) async {
+Future<void> markBookingComplete(int bookingID, BuildContext context) async {
   final url = Uri.parse('http://localhost:3000/markComplete?bookingID=$bookingID');
 
   try {
     final response = await http.post(url);
     if (response.statusCode == 200) {
-      print('Booking marked as completed');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Successfully marked booking as completed. Refresh to see changes.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     } else {
-      print('Failed to mark booking as completed: ${response.body}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to mark booking as completed: ${response.body}'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   } catch (error) {
-    print('Error marking booking as completed: $error');
-    // Handle error
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Error marking booking as completed: $error'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 }
 
-Future<void> markBookingCancelled(int bookingID) async {
+Future<void> markBookingCancelled(int bookingID, BuildContext context) async {
   final url = Uri.parse('http://localhost:3000/markCancelled?bookingID=$bookingID');
 
   try {
     final response = await http.post(url);
     if (response.statusCode == 200) {
-      print('Booking marked as cancelled');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Successfully marked booking as cancelled. Refresh to see changes.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     } else {
-      print('Failed to mark booking as cancelled: ${response.body}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to mark booking as cancelled: ${response.body}'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   } catch (error) {
-    print('Error marking booking as cancelled: $error');
-    // Handle error
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Error marking booking as cancelled: $error'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 }
