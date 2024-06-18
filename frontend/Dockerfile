@@ -1,24 +1,19 @@
-# Use an official Flutter image as a base
-FROM flutter:latest
+# Use the official Flutter Docker image with stable channel
+FROM google/dart:latest
 
-# Set up necessary dependencies
-RUN apt-get update \
-    && apt-get install -y curl git unzip xz-utils zip \
-    && apt-get clean
+# Set environment variables
+ENV FLUTTER_HOME /opt/flutter
+ENV PATH $FLUTTER_HOME/bin:$PATH
 
-# Set up environment variables
-ENV PATH "$PATH:/flutter/bin"
+# Install necessary dependencies
+RUN apt-get update && \
+    apt-get install -y git unzip && \
+    apt-get clean
 
-# Download and install Flutter SDK
-RUN git clone https://github.com/flutter/flutter.git /flutter
-ENV PATH "$PATH:/flutter/bin/cache/dart-sdk/bin"
+# Clone your Flutter web app repository
+RUN git clone https://github.com/your-username/jubenshaapptest.git /app
 
-# Run flutter doctor to install additional dependencies
-RUN flutter doctor
-
-# Copy the rest of your Flutter app code to the container
-COPY . /frontend/
-WORKDIR /frontend
+WORKDIR /app/frontend
 
 # Install Flutter dependencies
 RUN flutter pub get
@@ -26,6 +21,8 @@ RUN flutter pub get
 # Build Flutter web app
 RUN flutter build web
 
-# Specify the build directory
+# Expose the port your app runs on
 EXPOSE 8080
-CMD ["flutter", "run", "--release", "--no-sound-null-safety", "-d", "web"]
+
+# Run your Flutter web app when the container starts
+CMD ["flutter", "run", "-d", "web"]
